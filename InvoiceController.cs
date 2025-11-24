@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace BuggyApp.Controllers
 {
@@ -7,22 +9,66 @@ namespace BuggyApp.Controllers
     [Route("api/[controller]")]
     public class InvoiceController : ControllerBase
     {
-        [HttpGet]
-        public IActionResult GetInvoice()
+        private readonly AppDbContext _context;
+
+        public InvoiceController(AppDbContext context)
         {
-            var items = new List<Item>
+            _context = context;
+        }
+
+        // GET: api/invoice/1
+        [HttpGet("{invoiceId}")]
+        public IActionResult GetInvoice(int invoiceId)
+        {
+            var invoice = _context.Invoices
+                .Include(i => i.Items)
+                .FirstOrDefault(i => i.InvoiceID == invoiceId);
+
+            if (invoice == null)
+                return NotFound(new { message = "Invoice not found" });
+
+            // Convert response into your required JSON format
+            var response = new
             {
-                new Item { name = "Widget A", price = 19.99 },
-                new Item { name = "Widget B", price = 29.99 }
+                invoiceId = invoice.InvoiceID,
+                customerName = invoice.CustomerName,
+                items = invoice.Items.Select(item => new
+                {
+                    name = item.Name,
+                    price = item.Price
+                }).ToList()
             };
 
-            return Ok(new { items });
+            return Ok(response);
         }
+    }
 
-        public class Item
-        {
-            public string name { get; set; }
-            public double price { get; set; }
-        }
+
+    public class Invoice
+    {
+        public int InvoiceID { get; set; }
+        public string CustomerName { get; set; }
+
+        public List<InvoiceItem> Items { get; set; }
+    }
+
+    public class InvoiceItem
+    {
+        public int ItemID { get; set; }
+        public int InvoiceID { get; set; }
+        public string Name { get; set; }
+        public decimal Price { get; set; }
+
+        public Invoice Invoice { get; set; }
+    }
+
+
+    public class AppDbContext : DbContext
+    {
+        public AppDbContext(DbContextOptions<AppDbContext> options)
+            : base(options) { }
+
+        public DbSet<Invoice> Invoices { get; set; }
+        public DbSet<InvoiceItem> InvoiceItems { get; set; }
     }
 }
